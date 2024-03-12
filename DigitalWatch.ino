@@ -1,97 +1,42 @@
 #include <Arduino.h>
 #include <LiquidCrystal_I2C.h>
 
-// Inisialiasi LCD
-LiquidCrystal_I2C lcd(0x27, 16, 2);
-// Variabel untuk menyimpan jumlah detik
-volatile int seconds = 0; 
-// Flag untuk menandakan waktu telah berubah
-volatile bool flag = false; 
-// Flag untuk menandakan tombol ditekan
-volatile bool buttonPressed = false; 
-// Waktu mulai tombol ditekan
-volatile unsigned long buttonPressStartTime = 0;
-// Durasi tombol ditekan
-volatile unsigned long buttonPressDuration;
-// Pin Button
-const int buttonPin = 2;
-// Variabel untuk menyimpan mode button
-volatile int mode = 0;
-
 struct Waktu {
   int jam;
   int menit;
   int detik;
 };
 
-// Fungsi untuk menambahkan detik ke waktu
-Waktu tambahDetik(Waktu waktuAwal, int detikTambahan) {
-  // Mengubah tambahan detik menjadi jam, menit, dan detik baru
-  int jamTambahan = detikTambahan / 3600;
-  int sisaDetik = detikTambahan % 3600;
-  int menitTambahan = sisaDetik / 60;
-  int detikBaru = sisaDetik % 60;
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+const int buttonPin2 = 2;
+const int buttonPin3 = 3;
+const int buttonPin4 = 4;
+const int buzzerPin = 7;
 
-  // Menambahkan jam, menit, dan detik tambahan ke waktu awal
-  Waktu waktuBaru = {waktuAwal.jam + jamTambahan, waktuAwal.menit + menitTambahan, waktuAwal.detik + detikBaru};
+bool buttonRead3 = false;
+bool buttonRead4 = false;
 
-  // Handle jika detik baru melebihi 60
-  waktuBaru.menit += waktuBaru.detik / 60;
-  waktuBaru.detik %= 60;
+volatile int seconds = 0; 
+volatile bool flag = false; 
+volatile bool buttonPressed = false; 
+volatile unsigned long buttonPressStartTime = 0;
+volatile unsigned long buttonPressDuration;
+volatile int mode = 0;
 
-  // Handle jika menit baru melebihi 60
-  waktuBaru.jam += waktuBaru.menit / 60;
-  waktuBaru.menit %= 60;
+volatile bool setTimer = 0;
+volatile int timerDown = 0;
 
-  // Handle jika jam baru melebihi 24 jam
-  waktuBaru.jam %= 24;
+int buttonPresses;
+int previousButtonState = LOW;
 
-  return waktuBaru;
-}
+Waktu waktuAwal;
+Waktu waktuAwalTimer = {0, 0, 0};
+Waktu waktuBaru;
+Waktu waktuBaruTimer;
+Waktu waktuBaruTimer2;
 
-// Fungsi untuk menghandle interrupt timer
-ISR(TIMER1_COMPA_vect) {
-  seconds++;
-  flag = true;
-}
-
-// Fungsi untuk mengubah Mode dari Jam
-void watchMode() {
-  if ((buttonPressDuration > 3) && (mode < 3)){
-    mode++;
-  }
-  else if ((buttonPressDuration > 3) && (mode == 3)){
-    mode = 0;
-  }
-}
-
-void changeMode(){
-  switch(mode){
-    case 0:
-      Waktu waktuAwal = {20, 21, 50};
-      Waktu waktuBaru = tambahDetik(waktuAwal, seconds);
-
-      lcd.clear();
-      lcd.print(waktuBaru.jam);
-      lcd.print(":");
-      lcd.print(waktuBaru.menit);
-      lcd.print(":");
-      lcd.print(waktuBaru.detik);
-      break;
-    case 1:
-      break;
-    case 2:
-      break;
-    case 3:
-      break;
-    default:
-      break;
-  }
-}
-
-// Fungsi untuk menghandle interrupt tombol
-int buttonInterrupt() {
-  if (digitalRead(buttonPin) == HIGH) {
+void buttonInterrupt() {
+  if (digitalRead(buttonPin2) == HIGH) {
     buttonPressStartTime = millis(); 
     buttonPressed = true; 
   }
@@ -111,6 +56,154 @@ int buttonInterrupt() {
   }
 }
 
+void countButtonPresses(int buttonPin) {
+  int buttonState = digitalRead(buttonPin);
+
+  if (buttonState == HIGH && previousButtonState == LOW) {
+    if(buttonPin == buttonPin3){
+      buttonPresses = buttonPresses + 60;
+    }
+    else if(buttonPin == buttonPin4){
+      buttonPresses = buttonPresses - 60;
+    }
+  }
+
+  previousButtonState = buttonState;
+}
+
+Waktu tambahDetik(Waktu waktuAwal, int detikTambahan) {
+  int jamTambahan = detikTambahan / 3600;
+  int sisaDetik = detikTambahan % 3600;
+  int menitTambahan = sisaDetik / 60;
+  int detikBaru = sisaDetik % 60;
+
+  Waktu waktuBaru = {waktuAwal.jam + jamTambahan, waktuAwal.menit + menitTambahan, waktuAwal.detik + detikBaru};
+
+  waktuBaru.menit += waktuBaru.detik / 60;
+  waktuBaru.detik %= 60;
+
+  waktuBaru.jam += waktuBaru.menit / 60;
+  waktuBaru.menit %= 60;
+
+  waktuBaru.jam %= 24;
+
+  return waktuBaru;
+}
+
+Waktu kurangiDetik(Waktu waktuAwal, int detikKurang) {
+  int jamKurang = detikKurang / 3600;
+  int sisaDetik = detikKurang % 3600;
+  int menitKurang = sisaDetik / 60;
+  int detikBaru = sisaDetik % 60;
+
+  Waktu waktuBaru = {waktuAwal.jam + jamKurang, waktuAwal.menit + menitKurang, waktuAwal.detik + detikBaru};
+
+  if (waktuBaru.detik < 0) {
+    waktuBaru.detik += 60;
+    waktuBaru.menit--;
+  }
+  if (waktuBaru.menit < 0) {
+    waktuBaru.menit += 60;
+    waktuBaru.jam--;
+  }
+  if (waktuBaru.jam < 0) {
+    waktuBaru.jam += 24;
+  }
+
+  return waktuBaru;
+}
+
+ISR(TIMER1_COMPA_vect) {
+  seconds++;
+  flag = true;
+}
+
+void watchMode() {
+  if ((buttonPressDuration == 1) && (mode < 2)){
+    mode++;
+  }
+  else if ((buttonPressDuration == 1) && (mode == 2)){
+    mode = 0;
+  }
+}
+
+void timerMode() {
+  if ((buttonPressDuration >= 2) && (setTimer == false) && (mode == 1)){
+    setTimer = true;
+  }
+  else if ((buttonPressDuration >= 2) && (setTimer == true) && (mode == 1)){
+    setTimer = false;
+  }
+  buttonPressDuration = 0;
+}
+
+void changeMode(){
+  switch(mode){
+    case 0:
+      lcd.setCursor(0, 0);
+      lcd.print("Digital Watch");
+
+      lcd.setCursor(0, 1);
+      waktuAwal = {23, 58, 50};
+      waktuBaru = tambahDetik(waktuAwal, seconds);
+
+      lcd.print(waktuBaru.jam);
+      lcd.print(":");
+      lcd.print(waktuBaru.menit);
+      lcd.print(":");
+      lcd.print(waktuBaru.detik);
+      break;
+    case 1:
+      lcd.setCursor(0, 0);
+      lcd.print("Timer");
+      lcd.setCursor(0, 1);
+
+      if(setTimer){
+          timerDown--;
+          waktuBaruTimer2 = kurangiDetik(waktuBaruTimer, timerDown);
+          if(waktuBaruTimer2.jam == waktuAwalTimer.jam && waktuBaruTimer2.menit== waktuAwalTimer.menit && waktuBaruTimer2.detik == waktuAwalTimer.detik){
+            setTimer = false;
+            while(!digitalRead(buttonPin2)){
+              digitalWrite(7, HIGH);
+              digitalWrite(7, LOW);
+            }
+            timerDown = 0;
+          }
+
+          lcd.print(waktuBaruTimer2.jam);
+          lcd.print(":");
+          lcd.print(waktuBaruTimer2.menit);
+          lcd.print(":");
+          lcd.print(waktuBaruTimer2.detik);
+      }
+      else{
+        countButtonPresses(buttonPin3);
+        countButtonPresses(buttonPin4);
+        waktuBaruTimer = tambahDetik(waktuAwalTimer, buttonPresses);
+        lcd.print(waktuBaruTimer.jam);
+        lcd.print(":");
+        lcd.print(waktuBaruTimer.menit);
+        lcd.print(":");
+        lcd.print(waktuBaruTimer.detik);
+      }
+      break;
+    default:
+      lcd.setCursor(0, 0);
+      lcd.print("Digital Watch");
+
+      lcd.setCursor(0, 1);
+      waktuAwal = {20, 21, 50};
+      waktuBaru = tambahDetik(waktuAwal, seconds);
+
+      lcd.print(waktuBaru.jam);
+      lcd.print(":");
+      lcd.print(waktuBaru.menit);
+      lcd.print(":");
+      lcd.print(waktuBaru.detik);
+      break;
+  }
+}
+
 void setup() {
   // Setup Serial Monitor
   Serial.begin(9600);
@@ -118,11 +211,14 @@ void setup() {
   // Setup LCD
   lcd.begin();
   lcd.backlight();
-  lcd.setCursor(0, 0);
 
   // Atur pin tombol sebagai input & interrupt eksternal untuk tombol
-  pinMode(buttonPin, INPUT);
-  attachInterrupt(digitalPinToInterrupt(buttonPin), buttonInterrupt, CHANGE); 
+  pinMode(buttonPin2, INPUT);
+  pinMode(buttonPin3, INPUT);
+  pinMode(buttonPin4, INPUT);
+  pinMode(buzzerPin, OUTPUT);
+  
+  attachInterrupt(digitalPinToInterrupt(buttonPin2), buttonInterrupt, CHANGE); 
 
   // Set timer1 untuk interrupt setiap 1 detik, Mode CTC, dan prescaler 1024
   TCCR1A = 0; 
@@ -133,17 +229,10 @@ void setup() {
 }
 
 void loop() {
-    if (flag) {
-        Waktu waktuAwal = {20, 21, 50};
-        Waktu waktuBaru = tambahDetik(waktuAwal, seconds);
-
-        lcd.clear();
-        lcd.print(waktuBaru.jam);
-        lcd.print(":");
-        lcd.print(waktuBaru.menit);
-        lcd.print(":");
-        lcd.print(waktuBaru.detik);
-        
-        flag = false; // Reset flag
-    }
+  if (flag) {
+    lcd.clear();
+    changeMode();
+    timerMode();
+    flag = false; // Reset flag
+  }
 }
