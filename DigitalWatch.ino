@@ -26,8 +26,8 @@ int previousButtonState = LOW;
 volatile int seconds = 0; 
 volatile bool flag = false; 
 volatile bool buttonPressed = false; 
-volatile unsigned long buttonPressStartTime = 0;
-volatile unsigned long buttonPressDuration;
+volatile double buttonPressStartTime = 0;
+volatile double buttonPressDuration;
 
 // Mode Variable
 volatile int mode = 0;
@@ -73,7 +73,7 @@ ISR(TIMER1_COMPA_vect) {
 
 // External Button interrupt Function for Button 2
 void buttonInterrupt() {
-  if (digitalRead(buttonPin2) == HIGH) {
+  if (digitalRead(buttonPin2) == LOW) {
     buttonPressStartTime = millis(); 
     buttonPressed = true; 
   }
@@ -198,20 +198,20 @@ void displayLCD(Waktu time){
 
 // Change Watch Mode with Button 2
 void watchMode() {
-  if ((buttonPressDuration == 1) && (mode < 3) && (!setTimer) && (!setAlarm) && (!setStopwatch)){
+  if ((buttonPressDuration < 3) && (buttonPressDuration > 0.5) && (mode < 3) && (!setTimer) && (!setAlarm) && (!setStopwatch)){
     mode++;
   }
-  else if ((buttonPressDuration == 1) && (mode == 3) && (!setTimer) && (!setAlarm) && (!setStopwatch)){
+  else if ((buttonPressDuration < 3) && (buttonPressDuration > 0.5) && (mode == 3) && (!setTimer) && (!setAlarm) && (!setStopwatch)){
     mode = 0;
   }
 }
 
 // Set Timer with Button 2
 void timerMode() {
-  if ((buttonPressDuration >= 2) && (setTimer == false) && (mode == 1)){
+  if ((buttonPressDuration >= 3) && (setTimer == false) && (mode == 1)){
     setTimer = true;
   }
-  else if ((buttonPressDuration >= 2) && (setTimer == true) && (mode == 1)){
+  else if ((buttonPressDuration >= 3) && (setTimer == true) && (mode == 1)){
     setTimer = false;
   }
   buttonPressDuration = 0;
@@ -219,10 +219,10 @@ void timerMode() {
 
 // Set Alarm with Button 2
 void alarmMode() {
-  if ((buttonPressDuration >= 2) && (setAlarm == false) && (mode == 2)){
+  if ((buttonPressDuration >= 3) && (setAlarm == false) && (mode == 2)){
     setAlarm = true;
   }
-  else if ((buttonPressDuration >= 2) && (setAlarm == true) && (mode == 2)){
+  else if ((buttonPressDuration >= 3) && (setAlarm == true) && (mode == 2)){
     setAlarm = false;
   }
   buttonPressDuration = 0;
@@ -230,10 +230,10 @@ void alarmMode() {
 
 // Set Stopwatch with Button 2
 void stopwatchMode() {
-  if ((buttonPressDuration >= 2) && (setStopwatch == false) && (mode == 3)){
+  if ((buttonPressDuration >= 3) && (setStopwatch == false) && (mode == 3)){
     setStopwatch = true;
   }
-  else if ((buttonPressDuration >= 2) && (setStopwatch == true) && (mode == 3)){
+  else if ((buttonPressDuration >= 3) && (setStopwatch == true) && (mode == 3)){
     setStopwatch = false;
   }
   buttonPressDuration = 0;
@@ -263,7 +263,7 @@ void changeMode(){
           displayLCD(counterTimer);
           if(counterTimer.jam == waktuAwalTimer.jam && counterTimer.menit == waktuAwalTimer.menit && counterTimer.detik == waktuAwalTimer.detik){
             setTimer = false;
-            while(!digitalRead(buttonPin2)){
+            while(digitalRead(buttonPin2)){
               digitalWrite(buzzerPin, HIGH);
               digitalWrite(buzzerPin, LOW);
             }
@@ -299,7 +299,7 @@ void changeMode(){
 
         if(counterAlarm.jam == targetAlarm.jam && counterAlarm.menit== targetAlarm.menit && counterAlarm.detik == targetAlarm.detik){
           setAlarm = false;
-          while(!digitalRead(buttonPin2)){
+          while(digitalRead(buttonPin2)){
             digitalWrite(buzzerPin, HIGH);
             digitalWrite(buzzerPin, LOW);
           }
